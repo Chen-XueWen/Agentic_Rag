@@ -1,14 +1,35 @@
-from langchain_community.retrievers import BM25Retriever
-from typing import List
+import datasets
 from langchain.docstore.document import Document
+from langchain_community.retrievers import BM25Retriever
+from langchain.tools import Tool
 
-class GuestInfoRetriever:
-    def __init__(self, docs: List[Document]):
-        self._bm25 = BM25Retriever.from_documents(docs)
+guest_dataset = datasets.load_dataset("agents-course/unit3-invitees", split="train")
 
-    def query(self, q: str, top_k: int = 3) -> str:
-        results = self._bm25.invoke(q)
-        if not results:
-            return "No matching guest information found."
-        # join up to top_k matches
-        return "\n\n".join(doc.page_content for doc in results[:top_k])
+docs = [
+    Document(
+        page_content="\n".join([
+            f"Name: {guest['name']}",
+            f"Relation: {guest['relation']}",
+            f"Description: {guest['description']}",
+            f"Email: {guest['email']}"
+        ]),
+        metadata={"name": guest["name"]}
+    )
+    for guest in guest_dataset
+]
+
+bm25_retriever = BM25Retriever.from_documents(docs)
+
+def extract_text(query: str) -> str:
+    """Retrieves detailed information about gala guests based on their name or relation."""
+    results = bm25_retriever.invoke(query)
+    if results:
+        return "\n\n".join([doc.page_content for doc in results[:3]])
+    else:
+        return "No matching guest information found."
+
+guest_info_tool = Tool(
+    name="guest_info_retriever",
+    func=extract_text,
+    description="Retrieves detailed information about gala guests based on their name or relation."
+)
